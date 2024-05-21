@@ -1,0 +1,20 @@
+[project]
+dependencies = [
+    "numpy",
+    "soundfile",
+    "scipy",
+    "torch>=1.8.1",
+    "tqdm",
+    "librosa",
+    "demucs",
+]
+name = "zfturbo_cdx"
+description = "An implementation of https://github.com/ZFTurbo/MVSEP-CDX23-Cinematic-Sound-Demixing"
+version = "1.0.0"
+
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = { "zfturbo_cdx" = "." }
