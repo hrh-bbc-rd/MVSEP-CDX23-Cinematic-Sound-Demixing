@@ -121,7 +121,7 @@ def predict_with_model(options):
     for input_audio in options["input_audio"]:
         if not os.path.isfile(input_audio):
             print(f"options {options}")
-            
+
             print(f"Error. No such file: {input_audio}. Please check path!")
             return
     output_folder = options["output_folder"]
@@ -154,22 +154,6 @@ def predict_with_model(options):
                 subtype="FLOAT",
             )
             print("File created: {}".format(output_folder + "/" + output_name))
-
-        # instrumental part 1
-        inst = audio.T - result["dialog"]
-        output_name = os.path.splitext(os.path.basename(input_audio))[
-            0
-        ] + "_{}.wav".format("instrum")
-        sf.write(output_folder + "/" + output_name, inst, sr, subtype="FLOAT")
-        print("File created: {}".format(output_folder + "/" + output_name))
-
-        # instrumental part 2
-        inst2 = result["music"] + result["effect"]
-        output_name = os.path.splitext(os.path.basename(input_audio))[
-            0
-        ] + "_{}.wav".format("instrum2")
-        sf.write(output_folder + "/" + output_name, inst2, sr, subtype="FLOAT")
-        print("File created: {}".format(output_folder + "/" + output_name))
 
     if update_percent_func is not None:
         val = 100
