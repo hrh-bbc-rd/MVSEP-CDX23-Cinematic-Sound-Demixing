@@ -63,7 +63,7 @@ def create_2d_sin_embedding(d_model, height, width, device="cpu", max_period=100
     pe[d_model::2, :, :] = (
         torch.sin(pos_h * div_term).transpose(0, 1).unsqueeze(2).repeat(1, 1, width)
     )
-    pe[d_model + 1:: 2, :, :] = (
+    pe[d_model + 1 :: 2, :, :] = (
         torch.cos(pos_h * div_term).transpose(0, 1).unsqueeze(2).repeat(1, 1, width)
     )
 
@@ -190,6 +190,7 @@ def get_mask(
     mask_type can be a combination of multiple masks: for instance "diag_jmask_random"
     """
     from xformers.sparse import SparseCSRTensor
+
     # create a list
     mask_types = mask_type.split("_")
 
@@ -315,8 +316,12 @@ class MyTransformerEncoderLayer(nn.TransformerEncoderLayer):
                 self.global_window = global_window
             self.sparsity = sparsity
         if group_norm:
-            self.norm1 = MyGroupNorm(int(group_norm), d_model, eps=layer_norm_eps, **factory_kwargs)
-            self.norm2 = MyGroupNorm(int(group_norm), d_model, eps=layer_norm_eps, **factory_kwargs)
+            self.norm1 = MyGroupNorm(
+                int(group_norm), d_model, eps=layer_norm_eps, **factory_kwargs
+            )
+            self.norm2 = MyGroupNorm(
+                int(group_norm), d_model, eps=layer_norm_eps, **factory_kwargs
+            )
 
         self.norm_out = None
         if self.norm_first & norm_out:
@@ -330,7 +335,10 @@ class MyTransformerEncoderLayer(nn.TransformerEncoderLayer):
 
         if sparse:
             self.self_attn = MultiheadAttention(
-                d_model, nhead, dropout=dropout, batch_first=batch_first,
+                d_model,
+                nhead,
+                dropout=dropout,
+                batch_first=batch_first,
                 auto_sparsity=sparsity if auto_sparsity else 0,
             )
             self.__setattr__("src_mask", torch.zeros(1, 1))
@@ -416,7 +424,8 @@ class CrossTransformerEncoderLayer(nn.Module):
 
         self.cross_attn: nn.Module
         self.cross_attn = nn.MultiheadAttention(
-            d_model, nhead, dropout=dropout, batch_first=batch_first)
+            d_model, nhead, dropout=dropout, batch_first=batch_first
+        )
         # Implementation of Feedforward model
         self.linear1 = nn.Linear(d_model, dim_feedforward, **factory_kwargs)
         self.dropout = nn.Dropout(dropout)
@@ -427,9 +436,15 @@ class CrossTransformerEncoderLayer(nn.Module):
         self.norm2: nn.Module
         self.norm3: nn.Module
         if group_norm:
-            self.norm1 = MyGroupNorm(int(group_norm), d_model, eps=layer_norm_eps, **factory_kwargs)
-            self.norm2 = MyGroupNorm(int(group_norm), d_model, eps=layer_norm_eps, **factory_kwargs)
-            self.norm3 = MyGroupNorm(int(group_norm), d_model, eps=layer_norm_eps, **factory_kwargs)
+            self.norm1 = MyGroupNorm(
+                int(group_norm), d_model, eps=layer_norm_eps, **factory_kwargs
+            )
+            self.norm2 = MyGroupNorm(
+                int(group_norm), d_model, eps=layer_norm_eps, **factory_kwargs
+            )
+            self.norm3 = MyGroupNorm(
+                int(group_norm), d_model, eps=layer_norm_eps, **factory_kwargs
+            )
         else:
             self.norm1 = nn.LayerNorm(d_model, eps=layer_norm_eps, **factory_kwargs)
             self.norm2 = nn.LayerNorm(d_model, eps=layer_norm_eps, **factory_kwargs)
@@ -457,8 +472,12 @@ class CrossTransformerEncoderLayer(nn.Module):
 
         if sparse:
             self.cross_attn = MultiheadAttention(
-                d_model, nhead, dropout=dropout, batch_first=batch_first,
-                auto_sparsity=sparsity if auto_sparsity else 0)
+                d_model,
+                nhead,
+                dropout=dropout,
+                batch_first=batch_first,
+                auto_sparsity=sparsity if auto_sparsity else 0,
+            )
             if not auto_sparsity:
                 self.__setattr__("mask", torch.zeros(1, 1))
                 self.mask_random_seed = mask_random_seed
@@ -622,13 +641,17 @@ class CrossTransformerEncoder(nn.Module):
         }
 
         kwargs_classic_encoder = dict(kwargs_common)
-        kwargs_classic_encoder.update({
-            "sparse": sparse_self_attn,
-        })
+        kwargs_classic_encoder.update(
+            {
+                "sparse": sparse_self_attn,
+            }
+        )
         kwargs_cross_encoder = dict(kwargs_common)
-        kwargs_cross_encoder.update({
-            "sparse": sparse_cross_attn,
-        })
+        kwargs_cross_encoder.update(
+            {
+                "sparse": sparse_cross_attn,
+            }
+        )
 
         for idx in range(num_layers):
             if idx % 2 == self.classic_parity:
@@ -802,6 +825,7 @@ class MultiheadAttention(nn.Module):
 
 def scaled_query_key_softmax(q, k, att_mask):
     from xformers.ops import masked_matmul
+
     q = q / (k.size(-1)) ** 0.5
     att = masked_matmul(q, k.transpose(-2, -1), att_mask)
     att = torch.nn.functional.softmax(att, -1)
@@ -816,24 +840,31 @@ def scaled_dot_product_attention(q, k, v, att_mask, dropout):
 
 
 def _compute_buckets(x, R):
-    qq = torch.einsum('btf,bfhi->bhti', x, R)
+    qq = torch.einsum("btf,bfhi->bhti", x, R)
     qq = torch.cat([qq, -qq], dim=-1)
     buckets = qq.argmax(dim=-1)
 
     return buckets.permute(0, 2, 1).byte().contiguous()
 
 
-def dynamic_sparse_attention(query, key, value, sparsity, infer_sparsity=True, attn_bias=None):
+def dynamic_sparse_attention(
+    query, key, value, sparsity, infer_sparsity=True, attn_bias=None
+):
     # assert False, "The code for the custom sparse kernel is not ready for release yet."
     from xformers.ops import find_locations, sparse_memory_efficient_attention
+
     n_hashes = 32
     proj_size = 4
     query, key, value = [x.contiguous() for x in [query, key, value]]
     with torch.no_grad():
-        R = torch.randn(1, query.shape[-1], n_hashes, proj_size // 2, device=query.device)
+        R = torch.randn(
+            1, query.shape[-1], n_hashes, proj_size // 2, device=query.device
+        )
         bucket_query = _compute_buckets(query, R)
         bucket_key = _compute_buckets(key, R)
         row_offsets, column_indices = find_locations(
-            bucket_query, bucket_key, sparsity, infer_sparsity)
+            bucket_query, bucket_key, sparsity, infer_sparsity
+        )
     return sparse_memory_efficient_attention(
-        query, key, value, row_offsets, column_indices, attn_bias)
+        query, key, value, row_offsets, column_indices, attn_bias
+    )
